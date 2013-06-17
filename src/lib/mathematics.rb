@@ -472,7 +472,7 @@ class Mathematics
   #
   # @param    [Array]   line1_point1  Accepts array containing floats or integers (x,y,z)
   # @param    [Array]   line1_point2  Accepts array containing floats or integers (x,y,z)
-  # @param    [Array]   line2_point2  Accepts array containing floats or integers (x,y,z)
+  # @param    [Array]   line2_point1  Accepts array containing floats or integers (x,y,z)
   # @param    [Array]   line2_point2  Accepts array containing floats or integers (x,y,z)
   #
   # @returns  [Float]   Float, the angle between (l1p1, l1p2) and (l2p1, l2p2)

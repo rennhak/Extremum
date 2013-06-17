@@ -18,18 +18,24 @@ require 'awesome_print'
 # Namespaces
 include GSL
 
+# Custom
+require_relative '../lib/mathematics'
 
 
 # @class      Class Curvature
 # @brief      The class Curvature takes input data an extracts local maxima on which it can be cut.
+#
+#             The input should be a rather smooth curve otherwise you will end up with alot of false
+#             positives for your precision/recall.
 class Curvature
 
   # @fn       def initialize  # {{{
   # @brief    Custom constructor for the Spline class
   def initialize
+    @mathematics = Mathematics.new
   end # of def initialize }}}
 
-  # @fn       def clean {{{
+  # @fn       def clean input {{{
   # @brief    Takes input data and cleans it from spaces, tabs and newlines for each line
   #
   #           " 554.2572093389093 -338.6062325459966 -561.6394251506157 \n" =>
@@ -46,7 +52,7 @@ class Curvature
     return input
   end # }}}
 
-  # @fn       def extract_columns {{{
+  # @fn       def extract_columns input {{{
   # @brief    Takes input data and returns each column as sub-arrays.
   #           Numbers are translated from string into Numeric.
   #           "Split e.g. x(t),y(t),z(t) into their own arrays
@@ -80,7 +86,7 @@ class Curvature
     return result
   end # }}}
 
-  # @fn       def extract_rows {{{
+  # @fn       def extract_rows input {{{
   # @brief    Takes input data and returns each row as sub-arrays with elements.
   #           Numbers are translated from string into Numeric.
   #           "Split e.g. "x(t),y(t),z(t)" into their own floats inside the array
@@ -109,7 +115,103 @@ class Curvature
     return result
   end # }}}
 
+  # @fn       def angles {{{
+  # @brief    Extracts all angles for given equvi-sized triangles on the time series data.
+  #           Takes a window size, e.g. 20 points with which the timeseries data
+  #           gets split into t(0), t(20), t(40). Using this a angle can be measured on t(20)
+  #           as two 3D lines intersect.
+  #           http://visual.ipan.sztaki.hu/corner/node7.html
+  #
+  #           The isosceles triangle described here extracts the angle from time series data.
+  #
+  # @param    [Array]       data
+  # @param    [Numeric]     window        Length of one side of the isosceles triangle expressed in a point window
+  #
+  # @returns  [Array]       Returns an array with numeric entries for each points angles of the isoscele triangle
+  def angles data, window = 10
 
+
+    #          B t(0+20)
+    #         **
+    #        *  *
+    #       *    *
+    #      *      *
+    #     C        A t(0)
+
+    length  = data.length - 1
+    results = []
+
+    0.upto( length ) do |index|
+      a = index
+      b = index + window
+      c = index + ( 2 * window )
+
+      # The beginning/end points smaller than the required window
+      results << nil if( a < window )
+      results << nil if( c > length )
+
+      next if( (a < window) or (c > length) )
+
+      results << @mathematics.angle_between_two_lines( data[a], data[b], data[c], data[b] ) 
+
+    end
+
+    results
+
+  end # of def angles }}}
+
+  # @fn       def select_corners data, angles, angle = 125 {{{
+  # @brief    Cuts the given data curve when a angle theta is smaller than e.g. 125 deg.
+  #
+  # @param    [Array]     data      Array containing row wise x,y,z data
+  # @param    [Array]     angles    Array containing angles for each point t_n, with nil if angle couldn't be extracted.
+  # @aaram    [Numeric]   angle     Angle used as cut criteria, smaller than given angle is a corner
+  #
+  # @returns  [Array]     Returns array containing data index, x,y,z of proposed cut point
+  def select_corners data, angles, angle = 125
+
+    # Remove nil's from angles
+    angles.collect! { |i| ( i.nil? ) ? ( 180.0 ) : ( i ) } # 180deg is straight line
+
+    result = []
+
+    angles.each_with_index do |b, i|
+
+      # 85 deg = very sharp
+      # 120 deg = normal corner
+
+      #          B t(0+20)
+      #         **
+      #        *  *
+      #       *    *
+      #      *      *
+      #     C        A t(0)
+
+      a = angles[ i - 1 ]
+      c = angles[ i + 1 ]
+      next if( a.nil? or c.nil? )
+
+      # make sure given angle is within criteria
+      if( b <= angle.to_f )
+        # make sure sourrounding angles are larger
+        if( (a >= b) and (c >= b) )
+          result << [ i, data[ i ] ]
+        end
+      end
+
+    end # of angles.each_with_index
+
+    result
+  end # }}}
+
+  # @fn       def density {{{
+  # @brief    The function extracts the epsilon area density at point p_n for the given time series.
+  #           This works similarly as a gaussian kernel, but only consideres the time series
+  #           component not the entire space.
+  def density
+  end # of def density }}}
+
+  attr_accessor   :mathematics
 end
 
 
@@ -118,10 +220,12 @@ if __FILE__ == $0
 
   curvature = Curvature.new
 
-  # Read sample tdata
-  data = File.open( "../../data/3d/non_linear/tdata.gpdata", "r" ).readlines
-  data = curvature.clean( data )                     # remove \t, \n, etc.
-  rows = curvature.extract_rows( data )
+  data      = File.open( "../data/3d/non_linear/result/tdata.gpdata", "r" ).readlines
+  data      = curvature.clean( data )                     # remove \t, \n, etc.
+  rows      = curvature.extract_rows( data )
+  angles    = curvature.angles( rows )
+  cuts      = curvature.select_corners( rows, angles )
+
 
   # Print x(t), y(t), z(t)
   # columns = curvature.extract_columns( data )
